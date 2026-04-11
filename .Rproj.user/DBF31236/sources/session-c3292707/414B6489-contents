@@ -1,0 +1,234 @@
+library(tm)
+library(cluster)
+library(topicmodels)
+library(igraph)
+library(RCA)
+
+##Word-Pair Analysis
+###First, read the dataset and create a Corpus:
+ReyPosts = read.csv('WheresRey.csv', header = T)
+View(as.data.frame(ReyPosts))
+ReyCorp = Corpus(VectorSource(ReyPosts$Posts))
+inspect(ReyCorp)
+
+###Then, preprocess the data:
+####First create two custom functions to remove unwanted text and another to replace one text with another
+StripString = content_transformer(function(x, pattern) gsub(pattern, '', x))
+SearchReplace = content_transformer(function(x, pattern1, pattern2) gsub(pattern1, pattern2, x))
+####Create custom function to retain only ASCII characters
+latin2ascii = content_transformer(function(x) iconv(x, 'latin1', 'ascii', sub = ''))
+
+####Now perform preprocessing tasks:
+ReyCorp = tm_map(ReyCorp, latin2ascii) 
+ReyCorp = tm_map(ReyCorp, content_transformer(tolower))
+ReyCorp = tm_map(ReyCorp, removePunctuation)
+ReyCorp = tm_map(ReyCorp, removeNumbers)
+ReyCorp = tm_map(ReyCorp, stripWhitespace)
+ReyCorp = tm_map(ReyCorp, StripString, 'http://[[a1num*]]/')
+ReyCorp = tm_map(ReyCorp, StripString, '[\r\n]')
+ReyCorp = tm_map(ReyCorp, StripString, '[\t]')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'theforceawakens', 'the force awakens')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'merchsexismproblem', 'merch sexism problem')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'highlightsdearthfemaletoyhtml', 'highlights dearth female toy')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'forceawakens', 'force awakens')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'awakens', 'awake')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'awaken', 'awake')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'arewereallygoingtostart', 'are we really going to start')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'makers', 'maker')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'highlights', 'highlight')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'figures', 'figure')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'merchandise', 'merch')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'merchs', 'merch')
+ReyCorp = tm_map(ReyCorp, SearchReplace, 'shes', 'she is')
+ReyCorp = tm_map(ReyCorp, StripString, 'http*')
+ReyCorp = tm_map(ReyCorp, StripString, 'www*')
+ReyCorp = tm_map(ReyCorp, StripString, '*html*')
+ReyCorp = tm_map(ReyCorp, StripString, '*com*')
+ReyCorp = tm_map(ReyCorp, removeWords, stopwords('english'))
+
+####Create TDM from preprocessed corpus
+ReyTDM = TermDocumentMatrix(ReyCorp)
+View(data.frame(as.matrix(ReyTDM)))
+
+##Create TDM with 95% sparsity:
+ReyTDM = removeSparseTerms(ReyTDM, 0.95)
+View(data.frame(as.matrix(ReyTDM)))
+
+####Find words that co-occur with the word whereisrey with a correlation coefficient of at least 10%:
+findAssocs(ReyTDM, 'whereisrey', 0.10)
+as.data.frame(findAssocs(ReyTDM, 'whereisrey', 0.10))
+
+
+#Creating semantic networks around the term whereisrey:
+##Choose focal term and call it term:
+
+term = 'whereisrey'
+Reynet1 = as.data.frame(findAssocs(ReyTDM, term, 0.10))
+Reynet1 = cbind(term, row.names(Reynet1), Reynet1)
+colnames(Reynet1) = c('word1', 'word2', 'freq')
+rownames(Reynet1) = NULL
+
+##Set Reynet1 to a new data frame Reynet2. In Reynet2, we will accumulate all edges that are formed by the associated word for each correlated word for whereisrey:
+
+Reynet2 = Reynet1
+
+for (i in 1:nrow(Reynet1))
+{term = Reynet1$word2[i]
+Reynetterm = as.data.frame(findAssocs(ReyTDM, term, 0.10))
+Reynetterm = cbind(term, rownames(Reynetterm), Reynetterm)
+colnames(Reynetterm) = c('word1', 'word2', 'freq')
+rownames(Reynetterm) = NULL
+Reynet2 = as.data.frame(rbind(Reynet2, Reynetterm))}
+
+View(Reynet2)
+
+##Reynet2 is the edgelist for the semantic network around the term whereisrey going up to two links out from the focal term.
+##To visualize the Reynet2 edgelist as a semantic network graph:
+Reynet2Graph = graph_from_data_frame(Reynet2, directed = F)
+Reynet2Graph = simplify(Reynet2Graph, remove.multiple = T, remove.loops = T)
+plot(Reynet2Graph)
+tkplot(Reynet2Graph)
+
+
+###########TOPIC MODELING#################
+
+#####CLUSTER ANALYSIS: A STATISTICAL APPROACH TO TOPIC MODELING
+
+##First, compute the distances between every pair of terms in the TDM, based on various methods, in this case the euclidean method, minimizing sum of squared distances between the term vectors in the TDM:
+ReyDist = dist(ReyTDM, method = 'euclidean')
+View(as.matrix(ReyDist))
+
+##Create clustering solution, where distances in the distance matrix are grouped into different groups based on similarity/cutoffs.
+###First we do hierarchical clustering...
+ReyHClust = hclust(d=ReyDist, method = 'ward.D')
+
+###Plot clustering solution
+plot(ReyHClust)
+
+rect.hclust(ReyHClust, k=6, border = 'blue')
+
+###To find what terms belong to what clusters:
+ReyTopics = cutree(ReyHClust, k=6)
+ReyTopics = as.data.frame(ReyTopics)
+View(ReyTopics)
+
+####Next we do k-means clustering:
+ReyKClust = kmeans(ReyDist, 6)
+ReyKTopics = as.data.frame(ReyKClust$cluster)
+View(ReyKTopics)
+
+##Average incidence of each term in each cluster
+ReyKClust$centers
+
+###Associating documents to clusters:
+##Start with an empty matrix:
+DistMatrix = matrix(nrow = ncol(ReyTDM), ncol = 6)
+
+##Fill each column (1 through 6) with the distances for that cluster
+for(i in 1:6) {
+  #Calculate distance between cluster center 'i' and all documents
+  temp_dist = as.matrix(dist(rbind(ReyKClust$centers[i,], t(as.matrix(ReyTDM)))))
+  
+  #Grab the first row (the distances) and put it into column 'i'
+  #Use [-1] to drop the distance of the center to itself, i.e., drop the first column
+  DistMatrix[,i] = temp_dist[1, -1]
+}
+
+##Convert to dataframe and name columns for clusters and rows for documents
+DistancestoCenters = as.data.frame(DistMatrix)
+colnames(DistancestoCenters) = c('DistC1', 'DistC2', 'DistC3', 'DistC4', 'DistC5', 'DistC6')
+rownames(DistancestoCenters) = colnames(ReyTDM) #Name rows by document
+View(DistancestoCenters)
+
+
+####LDA - Another statistical approach to topic modeling 
+##For this, we need to begin with the DTM. To obtain the latent distribution of topics across documents based on the observed distribution of terms across documents.
+##We generate a DTM that is not sparse so that all documents have at least one term in them:
+ReyDTMLDA = DocumentTermMatrix(ReyCorp)   #Sparsity is not applicable here since every doc needs to included.
+
+##Then, apply the LDA approach to the DTM to surface topics within the documents. We specify the number of topics we want to surface. We can use one of two methods for topic surfacing... one that is less efficient but more complete than the other... the Gibbs method; we use it here because the corpus is not too large.
+
+ReyTopicsLDA = LDA(ReyDTMLDA, method = 'Gibbs', k = 6, control = list(seed=1234))
+View(ReyTopicsLDA)
+
+#To identify the terms assigned to different topics, let's say we want the top 10 terms assigned to each topic:
+ReyTermsTopicsLDA = terms(ReyTopicsLDA, 10)
+View(ReyTermsTopicsLDA)
+
+##To obtain the density of topics discussed in documents: -- if alpha is greater than 1, which means more than 1 topic in one same doc. We want to move the alpha move to sharply to close to 1?
+ReyTopicsLDA@alpha
+
+##To obtain the density of each term within each topic:
+ReyTopicsLDA@beta
+##Put the density values in a data frame
+ReyTermTopicDensity = data.frame(rownames(t(as.matrix(ReyDTMLDA))), t(as.matrix(ReyTopicsLDA@beta)))
+View(ReyTermTopicDensity)
+
+#To see the density of each topic within each document:
+ReyTopicDocDensity = data.frame(rownames(as.matrix(ReyDTMLDA)), as.matrix(ReyTopicsLDA@gamma))
+View(ReyTopicDocDensity)
+
+#Based on the densities of topics across documents, LDA assigns each document to a single topic that is the most dense in that document, on a first come first served basis in case of a tie:
+topics(ReyTopicsLDA)
+as.data.frame(topics(ReyTopicsLDA))
+head(as.data.frame(topics(ReyTopicsLDA)), 10)
+
+
+####Topic Modeling Using SNA
+library(igraph)
+#create adjacency matrix from TDM x t(TDM)
+ReyCooccurMatrix=as.matrix(ReyTDM)%*%t(as.matrix(ReyTDM))
+#create simplified graph data object from adjacency matrix
+ReyGraph=simplify(graph.adjacency(ReyCooccurMatrix, weighted=T, mode='undirected'))
+V(ReyGraph)$color='yellow'			#plot the term graph
+plot(ReyGraph, layout=layout.gem(ReyGraph), vertex.shape='sphere')
+  
+evcent(ReyGraph)$vector 			#determine the centrality of terms to conversation
+mc=multilevel.community(ReyGraph) 		#discover term groupings via community analysis
+wc=walktrap.community(ReyGraph)
+  
+cbind(mc$names,mc$membership)			#which terms were assigned to different topics
+  #plot the different topics
+plot(mc, ReyGraph, vertex.shape='sphere',layout=layout.davidson.harel, vertex.label.color= 'black')
+title('Topics',cex.main=2,col.main='black')	#slap a title on it
+  
+#create a correlation matrix from t(TDM)
+ReyCorrel=cor(as.matrix(t(ReyTDM)))
+ReyCorrel[ReyCorrel<0]=0			#set negative correlations=0 'coz edges can't have negative weight
+#create simplified, weighted graph data object from adjacency matrix
+ReyGraph=simplify(graph.adjacency(ReyCorrel, weighted=T, mode='undirected'))
+#plot
+plot(ReyGraph, layout=layout.gem(ReyGraph), vertex.shape='sphere',vertex.label.color='black')
+  
+evcent(ReyGraph)$vector				#determine the centrality of the terms to conversation
+mc=multilevel.community(ReyGraph)		#discover term groupings via community analysis
+#plot the different topics
+plot(mc, ReyGraph, vertex.shape='sphere',layout=layout.davidson.harel, edge.curved=T, vertex.label.color= 'black')
+title('Topics',cex.main=2,col.main='black')
+  
+  
+
+##########Topic Modeling using RCA
+#load the RCA package
+library(RCA)
+#create a DTM with values ranging from 0 to 1
+ReyDTM=DocumentTermMatrix(ReyCorp, control=list(removePunctuation=T, removeNumbers=T,
+                                                  weighting=weightTfIdf))
+  
+rca=RCA(as.matrix(ReyDTM), alpha=0.05)		#run RCA; DO NOT RUN THIS - TOO RESOURCE INTENSIVE
+summary(rca)					#inspect output
+  
+rca$membership					#check membership vector
+  
+#create a data frame with the membership vector and the DTM
+ReyMembers=as.data.frame(cbind(as.matrix(ReyDTM),RCA=rca$membership))
+#obtain the terms associated with cluster 1 and cluster 777
+ReyMembers = subset(ReyMembers, RCA=="1" | RCA=="777")
+  
+#obtain the average weighted frequency of the first 20 terms for 
+#each cluster
+round(aggregate(ReyMembers[1:20], by=list(ReyMembers$RCA), FUN=mean), 4)
+  
+#plot RCA output as heat map
+plot(rca, module=1, colorblind = FALSE, heat_labels = TRUE)
+  
