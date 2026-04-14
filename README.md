@@ -1,45 +1,45 @@
-# #WhereIsRey 舆情分析：基于语义网络的消费者行动研究
+# #WhereIsRey Public Opinion Analysis: A Semantic Network Approach
 
-## 1. 项目背景
-2015年，《星球大战：原力觉醒》上映，但其女主角 Rey 的相关周边产品在节日期间严重缺失，引发了消费者在 Twitter 上的大规模抗议 (#WhereIsRey)。本项目使用**语义网络分析**，揭示消费者抗议的核心议题及其关联结构。
+## 1. Background
+In 2015, Star Wars: The Force Awakens was released, but merchandise featuring the female protagonist Rey was notably absent during the holiday season. This sparked a large-scale consumer protest on Twitter under the hashtag #WhereIsRey. This project uses **semantic network analysis** to uncover the core issues discussed by consumers and how they are connected.
 
-## 2. 分析方法与工具
-- **技术栈**：R 语言
-- **核心包**：`tm` (文本清洗)、`igraph` (网络分析)、`wordcloud`、`RColorBrewer`
-- **分析流程**：
-  1. 文本预处理（清洗、词干提取、去停用词）
-  2. 构建词项-文档矩阵
-  3. 使用 `findAssocs` 识别词汇关联
-  4. 构建两层语义网络并可视化
-  5. 层次聚类识别主题
+## 2. Methods & Tools
+- **Stack**: R language
+- **Key packages**: `tm` (text cleaning), `igraph` (network analysis), `wordcloud`, `RColorBrewer`
+- **Workflow**:
+  1. Text preprocessing (cleaning, stemming, stopword removal)
+  2. Build Term-Document Matrix
+  3. Identify word associations using `findAssocs`
+  4. Construct and visualize a two-layer semantic network
+  5. Hierarchical clustering to identify topics
 
-## 3. 核心发现
+## 3. Key Findings
 
-### 3.1 语义网络图
-![语义网络图](semantic_network.png)
+### 3.1 Semantic Network Graph
+![Semantic Network](semantic_network.png)
 
-**解读**：
-- `toy`、`girl`、`disney`、`hasbro` 处于网络中心
-- `sexism` 作为桥接节点，连接了 `girl` 和 `disney`
-- 这表明消费者的抗议明确指向 **"特定公司的特定产品"**，并已升级为对 **"品牌价值观"** 的批判
+**Interpretation**:
+- `toy`, `girl`, `disney`, `hasbro` are at the center of the network.
+- `sexism` acts as a bridge connecting `girl` and `disney`.
+- This indicates that consumer criticism was directed at **specific companies and products**, and escalated into a critique of **brand values**.
 
-### 3.2 主题聚类树状图
-![树状图](dendrogram.png)
+### 3.2 Topic Clustering Dendrogram
+![Dendrogram](dendrogram.png)
 
-**解读**：
-- 关键词可聚类为 4 个主要主题
-- 矩形框标出了自动分组的议题
+**Interpretation**:
+- Keywords can be clustered into 4 main topics.
+- Rectangles highlight automatically grouped themes.
 
-## 4. 结论与启示
-消费者的讨论从具体产品问题（缺失）上升到价值观问题（性别歧视）。企业危机管理需要：
-- 建立实时社交倾听机制
-- 识别话题演变路径
-- 在价值观层面做出回应
+## 4. Conclusion & Implications
+The conversation evolved from a specific product issue (missing merchandise) to a value-based issue (gender representation). For corporate crisis management, this highlights the need to:
+- Establish real-time social listening.
+- Track how discussion topics evolve.
+- Respond to value-based concerns when they arise.
 
-## 5. 如何复现
+## 5. How to Reproduce
 ```r
-# 1. 安装依赖包
+# 1. Install required packages
 install.packages(c('tm', 'igraph', 'wordcloud', 'RColorBrewer'))
 
-# 2. 运行分析脚本
+# 2. Run the analysis script
 source('analysis.R')
